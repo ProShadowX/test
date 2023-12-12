@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta http-equiv="Content-Language" content="ja">
+    <meta name="google" content="notranslate">
+    <title>Chat</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow-y: scroll;
+        }
+
+        #messages {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            padding-bottom: 100px;
+        }
+
+        #form {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background-color: #f1f1f1;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+        }
+
+        #form label,
+        #form input,
+        #form button {
+            display: inline-block;
+            margin: 5px;
+        }
+
+        #form button {
+            display: block;
+            margin-top: 10px;
+        }
+
+        #spacer {
+            height: 60px;
+        }
+
+        li {
+            border-bottom: 1px solid #ccc;
+            padding: 10px;
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        #messages li strong {
+            font-weight: bold;
+        }
+
+        .delete-button {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            cursor: pointer;
+            color: red;
+            font-weight: bold;
+        }
+
+        #typingNotification {
+            position: absolute;
+            bottom: 30px;
+            right: 20px;
+            background-color: #f1f1f1;
+            padding: 5px;
+            border-radius: 5px;
+            display: none;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.3/socket.io.js"></script>
+    <script type="text/javascript">
+        document.addEventListener('DOMContentLoaded', (event) => {
+            var socket = io.connect('http://' + document.domain + ':' + location.port);
+            var typingTimeout;
+            var username = prompt("Please enter your username:", "Anonymous") || 'Anonymous';
+            var isTabActive = true;
+            var lastMessage = '';
+
+            socket.on('message', function (data) {
+                var ul = document.getElementById('messages');
+                var li = document.createElement('li');
+                var ipDisplay = data.username ? `<br>IP: ${data.ip}` : '';
+                var messageId = 'message_' + Date.now();
+
+                var messageText = data.message;
+
+                // Display only if the current message is different from the last one
+                if (messageText !== lastMessage) {
+                    li.innerHTML = `<span class="delete-button" onclick="deleteMessage('${messageId}'); console.log('Button clicked!')">Delete</span> User: <strong>${data.username || username}</strong>${ipDisplay}<br>Message: ${messageText}`;
+                    li.setAttribute('id', messageId);
+                    ul.appendChild(li);
+                    lastMessage = messageText;
+
+                    scrollToBottom();
+
+                    if (!isTabActive) {
+                        showNotification(data.username || username, messageText);
+                    }
+                }
+            });
+
+            document.addEventListener('visibilitychange', function () {
+                isTabActive = document.visibilityState !== 'hidden';
+                if (isTabActive) {
+                    resetNotification();
+                }
+            });
+
+            document.getElementById('form').addEventListener('input', function () {
+                socket.emit('typing', { username: username });
+
+                clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(function () {
+                    clearTypingNotification();
+                }, 2000);
+            });
+
+            socket.on('typing', function (data) {
+                var typingNotification = document.getElementById('typingNotification');
+                typingNotification.innerHTML = `${data.username} is typing...`;
+                typingNotification.style.display = 'block';
+
+                clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(function () {
+                    clearTypingNotification();
+                }, 2000);
+            });
+
+            function clearTypingNotification() {
+                var typingNotification = document.getElementById('typingNotification');
+                typingNotification.innerHTML = '';
+                typingNotification.style.display = 'none';
+            }
+
+            document.getElementById('form').onsubmit = function () {
+                var messageInput = document.getElementById('message');
+                var message = messageInput.value;
+
+                var ip = null;
+                fetch('https://api64.ipify.org?format=json')
+                    .then(response => response.json())
+                    .then(data => {
+                        ip = data.ip;
+                        socket.emit('message', { username: username, ip: ip, message: message });
+                    });
+
+                messageInput.value = '';
+
+                return false;
+            };
+
+            function scrollToBottom() {
+                var messagesContainer = document.getElementById('messages');
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
+            function deleteMessage(messageId) {
+                var messageElement = document.getElementById(messageId);
+                if (messageElement) {
+                    messageElement.remove();
+                }
+            }
+
+            function showNotification(sender, message) {
+                if (Notification.permission === "granted") {
+                    var notification = new Notification("New Message", {
+                        body: `${sender}: ${message}`,
+                    });
+                } else if (Notification.permission !== "denied") {
+                    Notification.requestPermission().then(function (permission) {
+                        if (permission === "granted") {
+                            showNotification(sender, message);
+                        }
+                    });
+                }
+            }
+
+            function resetNotification() {
+                document.title = "Chat";
+            }
+
+            socket.emit('requestUserList');
+        });
+    </script>
+</head>
+
+<body>
+    <ul id="messages"></ul>
+    <div id="typingNotification"></div>
+    <form id="form">
+        <label for="message">Message:</label>
+        <input id="message" autocomplete="off" />
+        <button id="sendButton">Send</button>
+    </form>
+    <div id="spacer"></div>
+</body>
+
+</html>

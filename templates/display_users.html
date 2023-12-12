@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User List</title>
+</head>
+
+<body>
+    <h2>User List</h2>
+    <ul id="userList"></ul>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.3/socket.io.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            var socket = io.connect('http://10.221.201.51:5000');
+
+            socket.on('userList', function (users) {
+                var ul = document.getElementById('userList');
+                ul.innerHTML = '';
+
+                users.forEach(function (user) {
+                    var li = document.createElement('li');
+                    li.textContent = `ユーザー名: ${user.username}, IP: ${user.ip}`;
+                    ul.appendChild(li);
+                });
+            });
+
+            // 別のサイト内 'document.addEventListener' ブロックの最後に以下のコードを追加
+            socket.emit('requestUserList');
+        });
+    </script>
+</body>
+
+</html>
